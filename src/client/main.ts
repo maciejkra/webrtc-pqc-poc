@@ -25,6 +25,7 @@ const roomInput = document.getElementById('room-input') as HTMLInputElement;
 const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
 const hangupBtn = document.getElementById('hangup-btn') as HTMLButtonElement;
 const generateRoomBtn = document.getElementById('generate-room-btn') as HTMLButtonElement;
+const verifyPqcBtn = document.getElementById('verify-pqc-btn') as HTMLButtonElement;
 
 const localVideo = document.getElementById('local-video') as HTMLVideoElement;
 const remoteVideo = document.getElementById('remote-video') as HTMLVideoElement;
@@ -138,6 +139,11 @@ function updateStatusUI(state: PQCState) {
   // Update button states
   joinBtn.disabled = state.status !== 'established';
   hangupBtn.disabled = state.status !== 'established';
+
+  // Enable verification button when PQC is established
+  if (verifyPqcBtn) {
+    verifyPqcBtn.disabled = !state.sharedSecretDerived;
+  }
 }
 
 function formatStatus(status: string): string {
@@ -187,6 +193,34 @@ hangupBtn.addEventListener('click', () => {
   localVideo.srcObject = null;
   remoteVideo.srcObject = null;
   log('Call ended', 'warning');
+});
+
+// PQC Verification button
+verifyPqcBtn.addEventListener('click', async () => {
+  log('Generating PQC verification report...', 'info');
+
+  const report = await pqcClient.generateVerificationReport();
+
+  if (report) {
+    // Log to console
+    console.log(report);
+
+    // Create downloadable file
+    const blob = new Blob([report], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pqc-verification-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    log('PQC verification report generated and downloaded!', 'success');
+    log('Check your downloads folder and browser console for the full report', 'info');
+  } else {
+    log('Failed to generate verification report - PQC not established', 'error');
+  }
 });
 
 // Connect on page load

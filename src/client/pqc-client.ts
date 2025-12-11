@@ -6,6 +6,7 @@
 
 import { ml_kem768 } from '@noble/post-quantum/ml-kem';
 import { setupPQCTransforms, isInsertableStreamsSupported } from './pqc-transform.js';
+import { generatePQCProof, createVerificationReport, type PQCVerificationResult } from './pqc-verifier.js';
 
 export interface PQCState {
   status: 'disconnected' | 'connecting' | 'pqc-handshake' | 'established' | 'error';
@@ -34,6 +35,7 @@ export interface PQCClient {
   startCall(): Promise<void>;
   hangup(): void;
   getStats(): Promise<RTCStatsReport | null>;
+  generateVerificationReport(): Promise<string | null>;
   onStateChange: (state: PQCState) => void;
   onLocalStream: (stream: MediaStream) => void;
   onRemoteStream: (stream: MediaStream) => void;
@@ -160,6 +162,24 @@ export function createPQCClient(): PQCClient {
     async getStats(): Promise<RTCStatsReport | null> {
       if (!peerConnection) return null;
       return peerConnection.getStats();
+    },
+
+    async generateVerificationReport(): Promise<string | null> {
+      if (!pqcMediaSecret) {
+        console.warn('[PQC Client] No shared secret available for verification');
+        return null;
+      }
+
+      try {
+        const proof = await generatePQCProof(
+          pqcMediaSecret,
+          state.pqcMediaMethod || 'unknown'
+        );
+        return createVerificationReport(proof);
+      } catch (e) {
+        console.error('[PQC Client] Failed to generate verification report:', e);
+        return null;
+      }
     }
   };
 
