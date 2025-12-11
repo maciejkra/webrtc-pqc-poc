@@ -5,6 +5,7 @@
  */
 
 import { ml_kem768 } from '@noble/post-quantum/ml-kem';
+import { setupPQCTransforms, isInsertableStreamsSupported } from './pqc-transform.js';
 
 export interface PQCState {
   status: 'disconnected' | 'connecting' | 'pqc-handshake' | 'established' | 'error';
@@ -21,6 +22,9 @@ export interface PQCState {
   dtlsGroup?: string;
   srtpCipher?: string;
   dtlsPqcEnabled?: boolean;
+  // PQC Media layer (Insertable Streams)
+  pqcMediaEnabled?: boolean;
+  pqcMediaMethod?: string;
 }
 
 export interface PQCClient {
@@ -69,6 +73,7 @@ export function createPQCClient(): PQCClient {
   let sharedSecret: Uint8Array | null = null;
   let encryptionKey: CryptoKey | null = null;
   let keyExchangeStartTime: number = 0;
+  let pqcMediaSecret: Uint8Array | null = null; // For media encryption
 
   const state: PQCState = {
     status: 'disconnected',
@@ -304,18 +309,27 @@ export function createPQCClient(): PQCClient {
     const finalSecretBuffer = await crypto.subtle.digest('SHA-256', combinedSecret);
     const finalSecret = new Uint8Array(finalSecretBuffer);
 
-    // Derive encryption key
+    // Store the shared secret for media encryption
+    pqcMediaSecret = finalSecret;
+
+    // Derive encryption key for signaling
     encryptionKey = await deriveKey(finalSecret, 'webrtc-pqc-signaling');
 
     const keyExchangeTime = performance.now() - keyExchangeStartTime;
 
     console.log(`[PQC Client] PQC established in ${keyExchangeTime.toFixed(2)}ms`);
 
+    // Check if Insertable Streams is supported for media PQC
+    const insertableStreamsSupported = isInsertableStreamsSupported();
+    console.log(`[PQC Client] Insertable Streams supported: ${insertableStreamsSupported}`);
+
     updateState({
       status: 'established',
       sharedSecretDerived: true,
       keyExchangeTime,
-      algorithm: message.algorithm
+      algorithm: message.algorithm,
+      pqcMediaEnabled: false, // Will be set true when transforms are applied
+      pqcMediaMethod: insertableStreamsSupported ? 'pending' : 'not-supported'
     });
   }
 
@@ -408,8 +422,36 @@ export function createPQCClient(): PQCClient {
       console.log('[PQC Client] ICE state:', peerConnection?.iceConnectionState);
     };
 
-    peerConnection.onconnectionstatechange = () => {
+    peerConnection.onconnectionstatechange = async () => {
       console.log('[PQC Client] Connection state:', peerConnection?.connectionState);
+
+      // Set up PQC media transforms when connected
+      if (peerConnection?.connectionState === 'connected' && pqcMediaSecret) {
+        try {
+          console.log('[PQC Client] Setting up PQC media encryption...');
+          const result = await setupPQCTransforms(peerConnection, pqcMediaSecret);
+
+          if (result.supported) {
+            console.log(`[PQC Client] PQC media encryption ACTIVE via ${result.method}`);
+            updateState({
+              pqcMediaEnabled: true,
+              pqcMediaMethod: result.method
+            });
+          } else {
+            console.warn('[PQC Client] PQC media encryption not available');
+            updateState({
+              pqcMediaEnabled: false,
+              pqcMediaMethod: 'not-supported'
+            });
+          }
+        } catch (e) {
+          console.error('[PQC Client] Failed to set up PQC media transforms:', e);
+          updateState({
+            pqcMediaEnabled: false,
+            pqcMediaMethod: 'error'
+          });
+        }
+      }
     };
   }
 

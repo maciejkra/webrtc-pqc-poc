@@ -510,10 +510,12 @@
             <span class="algo-label">SRTP Cipher</span>
             <span id="srtp-cipher" class="algo-value">--</span>
           </div>
+          <div class="algo-detail">
+            <span class="algo-label">PQC Media Layer</span>
+            <span id="pqc-media-method" class="algo-value">--</span>
+          </div>
           <div class="info-box" style="margin-top: 10px; font-size: 0.75rem;">
-            <strong>Note:</strong> For PQC media encryption, enable experimental flags:<br>
-            <strong>Chrome:</strong> chrome://flags/#enable-tls13-kyber<br>
-            <strong>Firefox:</strong> about:config → security.tls.enable_kyber = true
+            <strong>Double Encryption:</strong> Media is encrypted with SRTP (standard) + PQC layer using Insertable Streams API with ML-KEM-768 derived keys.
           </div>
         </div>
 

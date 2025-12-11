@@ -19,6 +19,7 @@ const dtlsCipherEl = document.getElementById('dtls-cipher') as HTMLSpanElement;
 const dtlsGroupEl = document.getElementById('dtls-group') as HTMLSpanElement;
 const srtpCipherEl = document.getElementById('srtp-cipher') as HTMLSpanElement;
 const mediaPqcStatusEl = document.getElementById('media-pqc-status') as HTMLSpanElement;
+const pqcMediaMethodEl = document.getElementById('pqc-media-method') as HTMLSpanElement;
 
 const roomInput = document.getElementById('room-input') as HTMLInputElement;
 const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
@@ -98,15 +99,39 @@ function updateStatusUI(state: PQCState) {
     srtpCipherEl.textContent = state.srtpCipher || 'N/A';
   }
   if (mediaPqcStatusEl) {
-    if (state.dtlsPqcEnabled) {
+    // Check for PQC media via Insertable Streams first (our implementation)
+    if (state.pqcMediaEnabled) {
+      mediaPqcStatusEl.textContent = `PQC Active (${state.pqcMediaMethod})`;
+      mediaPqcStatusEl.className = 'status-value success';
+    } else if (state.dtlsPqcEnabled) {
+      // Native DTLS PQC (browser support)
       mediaPqcStatusEl.textContent = 'PQC Active (X25519MLKEM768)';
       mediaPqcStatusEl.className = 'status-value success';
+    } else if (state.pqcMediaMethod === 'pending') {
+      mediaPqcStatusEl.textContent = 'PQC Pending...';
+      mediaPqcStatusEl.className = 'status-value pending';
+    } else if (state.pqcMediaMethod === 'not-supported') {
+      mediaPqcStatusEl.textContent = 'Not Supported (need Chrome 86+)';
+      mediaPqcStatusEl.className = 'status-value warning';
     } else if (state.dtlsCipher) {
-      mediaPqcStatusEl.textContent = 'Classical (ECDHE)';
+      mediaPqcStatusEl.textContent = 'Classical (ECDHE) + PQC Layer';
       mediaPqcStatusEl.className = 'status-value warning';
     } else {
       mediaPqcStatusEl.textContent = 'Not Connected';
       mediaPqcStatusEl.className = 'status-value pending';
+    }
+  }
+
+  // Update PQC media method display
+  if (pqcMediaMethodEl) {
+    if (state.pqcMediaEnabled && state.pqcMediaMethod) {
+      pqcMediaMethodEl.textContent = state.pqcMediaMethod;
+      pqcMediaMethodEl.className = 'algo-value pqc-active';
+    } else if (state.pqcMediaMethod === 'not-supported') {
+      pqcMediaMethodEl.textContent = 'Insertable Streams not available';
+      pqcMediaMethodEl.className = 'algo-value';
+    } else {
+      pqcMediaMethodEl.textContent = state.pqcMediaMethod || '--';
     }
   }
 
