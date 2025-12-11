@@ -295,6 +295,15 @@
       font-family: 'Monaco', 'Menlo', monospace;
     }
 
+    .algo-value.pqc-active {
+      color: #00e676;
+      font-weight: bold;
+    }
+
+    .status-value.warning {
+      color: #ffc107;
+    }
+
     /* Logs Panel */
     #logs {
       max-height: 250px;
@@ -476,6 +485,35 @@
               <div class="title">Quantum-Resistant</div>
               <div class="desc">Protected against attacks from future quantum computers</div>
             </div>
+          </div>
+        </div>
+
+        <!-- DTLS/Media Encryption Stats -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon">M</div>
+            <h3>Media Encryption (DTLS)</h3>
+          </div>
+          <div class="status-row">
+            <span class="status-label">Media PQC Status</span>
+            <span id="media-pqc-status" class="status-value pending">Not Connected</span>
+          </div>
+          <div class="algo-detail">
+            <span class="algo-label">DTLS Cipher</span>
+            <span id="dtls-cipher" class="algo-value">--</span>
+          </div>
+          <div class="algo-detail">
+            <span class="algo-label">DTLS Key Exchange</span>
+            <span id="dtls-group" class="algo-value">--</span>
+          </div>
+          <div class="algo-detail">
+            <span class="algo-label">SRTP Cipher</span>
+            <span id="srtp-cipher" class="algo-value">--</span>
+          </div>
+          <div class="info-box" style="margin-top: 10px; font-size: 0.75rem;">
+            <strong>Note:</strong> For PQC media encryption, enable experimental flags:<br>
+            <strong>Chrome:</strong> chrome://flags/#enable-tls13-kyber<br>
+            <strong>Firefox:</strong> about:config → security.tls.enable_kyber = true
           </div>
         </div>
 

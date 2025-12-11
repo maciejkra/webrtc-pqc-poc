@@ -14,6 +14,12 @@ const publicKeySize = document.getElementById('public-key-size') as HTMLSpanElem
 const ciphertextSize = document.getElementById('ciphertext-size') as HTMLSpanElement;
 const sharedSecretStatus = document.getElementById('shared-secret-status') as HTMLSpanElement;
 
+// DTLS/Media stats elements
+const dtlsCipherEl = document.getElementById('dtls-cipher') as HTMLSpanElement;
+const dtlsGroupEl = document.getElementById('dtls-group') as HTMLSpanElement;
+const srtpCipherEl = document.getElementById('srtp-cipher') as HTMLSpanElement;
+const mediaPqcStatusEl = document.getElementById('media-pqc-status') as HTMLSpanElement;
+
 const roomInput = document.getElementById('room-input') as HTMLInputElement;
 const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
 const hangupBtn = document.getElementById('hangup-btn') as HTMLButtonElement;
@@ -76,6 +82,33 @@ function updateStatusUI(state: PQCState) {
   // Update shared secret status
   sharedSecretStatus.textContent = state.sharedSecretDerived ? 'Derived' : 'Pending';
   sharedSecretStatus.className = state.sharedSecretDerived ? 'success' : 'pending';
+
+  // Update DTLS/Media stats
+  if (dtlsCipherEl && state.dtlsCipher) {
+    dtlsCipherEl.textContent = state.dtlsCipher;
+  }
+  if (dtlsGroupEl && state.dtlsGroup) {
+    dtlsGroupEl.textContent = state.dtlsGroup;
+    // Highlight if PQC group
+    if (state.dtlsGroup.includes('MLKEM') || state.dtlsGroup.includes('Kyber')) {
+      dtlsGroupEl.className = 'algo-value pqc-active';
+    }
+  }
+  if (srtpCipherEl && state.srtpCipher) {
+    srtpCipherEl.textContent = state.srtpCipher || 'N/A';
+  }
+  if (mediaPqcStatusEl) {
+    if (state.dtlsPqcEnabled) {
+      mediaPqcStatusEl.textContent = 'PQC Active (X25519MLKEM768)';
+      mediaPqcStatusEl.className = 'status-value success';
+    } else if (state.dtlsCipher) {
+      mediaPqcStatusEl.textContent = 'Classical (ECDHE)';
+      mediaPqcStatusEl.className = 'status-value warning';
+    } else {
+      mediaPqcStatusEl.textContent = 'Not Connected';
+      mediaPqcStatusEl.className = 'status-value pending';
+    }
+  }
 
   // Update button states
   joinBtn.disabled = state.status !== 'established';

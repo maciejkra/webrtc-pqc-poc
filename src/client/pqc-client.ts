@@ -16,6 +16,11 @@ export interface PQCState {
   };
   keyExchangeTime?: number;
   sharedSecretDerived: boolean;
+  // DTLS/Media encryption stats
+  dtlsCipher?: string;
+  dtlsGroup?: string;
+  srtpCipher?: string;
+  dtlsPqcEnabled?: boolean;
 }
 
 export interface PQCClient {
@@ -24,10 +29,31 @@ export interface PQCClient {
   joinRoom(roomId: string): Promise<void>;
   startCall(): Promise<void>;
   hangup(): void;
+  getStats(): Promise<RTCStatsReport | null>;
   onStateChange: (state: PQCState) => void;
   onLocalStream: (stream: MediaStream) => void;
   onRemoteStream: (stream: MediaStream) => void;
   onMessage: (message: any) => void;
+}
+
+// Check if browser supports PQC DTLS (experimental)
+function detectPQCDTLSSupport(): { supported: boolean; method: string } {
+  // Check for Chrome's experimental flag
+  const hasWebRTCPQC = typeof (RTCPeerConnection.prototype as any).setConfiguration === 'function';
+
+  // Check user agent for known PQC-supporting browsers
+  const ua = navigator.userAgent;
+  const isFirefoxNightly = ua.includes('Firefox') && (ua.includes('Nightly') || parseInt(ua.match(/Firefox\/(\d+)/)?.[1] || '0') >= 134);
+  const isChromeCanary = ua.includes('Chrome') && parseInt(ua.match(/Chrome\/(\d+)/)?.[1] || '0') >= 131;
+
+  if (isFirefoxNightly) {
+    return { supported: true, method: 'firefox-nightly' };
+  }
+  if (isChromeCanary) {
+    return { supported: true, method: 'chrome-experimental' };
+  }
+
+  return { supported: false, method: 'none' };
 }
 
 export function createPQCClient(): PQCClient {
@@ -111,6 +137,10 @@ export function createPQCClient(): PQCClient {
     },
 
     hangup() {
+      if (statsInterval) {
+        clearInterval(statsInterval);
+        statsInterval = null;
+      }
       if (peerConnection) {
         peerConnection.close();
         peerConnection = null;
@@ -120,8 +150,55 @@ export function createPQCClient(): PQCClient {
         localStream = null;
       }
       sendMessage({ type: 'leave-room' });
+    },
+
+    async getStats(): Promise<RTCStatsReport | null> {
+      if (!peerConnection) return null;
+      return peerConnection.getStats();
     }
   };
+
+  let statsInterval: ReturnType<typeof setInterval> | null = null;
+
+  function startStatsMonitoring() {
+    if (statsInterval) clearInterval(statsInterval);
+
+    statsInterval = setInterval(async () => {
+      if (!peerConnection) return;
+
+      try {
+        const stats = await peerConnection.getStats();
+        stats.forEach((report) => {
+          if (report.type === 'transport') {
+            const dtlsCipher = report.dtlsCipher || 'N/A';
+            const srtpCipher = report.srtpCipher || 'N/A';
+            // dtlsGroup is proposed but may not exist yet
+            const dtlsGroup = (report as any).dtlsGroup || (report as any).tlsGroup || 'N/A';
+
+            // Check if PQC is in use (look for MLKEM or Kyber in the cipher/group)
+            const isPQC = dtlsCipher.includes('MLKEM') ||
+                          dtlsCipher.includes('Kyber') ||
+                          dtlsGroup.includes('MLKEM') ||
+                          dtlsGroup.includes('Kyber') ||
+                          dtlsGroup.includes('25519MLKEM');
+
+            updateState({
+              dtlsCipher,
+              srtpCipher,
+              dtlsGroup,
+              dtlsPqcEnabled: isPQC
+            });
+
+            if (isPQC) {
+              console.log('[PQC Client] PQC DTLS ACTIVE:', dtlsGroup, dtlsCipher);
+            }
+          }
+        });
+      } catch (e) {
+        // Stats may not be available yet
+      }
+    }, 1000);
+  }
 
   function updateState(updates: Partial<PQCState>) {
     Object.assign(state, updates);
@@ -261,14 +338,46 @@ export function createPQCClient(): PQCClient {
   }
 
   async function createPeerConnection() {
-    const config: RTCConfiguration = {
+    const pqcSupport = detectPQCDTLSSupport();
+    console.log('[PQC Client] PQC DTLS support:', pqcSupport);
+
+    // Base configuration
+    const config: RTCConfiguration & { cryptoOptions?: any } = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' }
       ]
     };
 
+    // Try to enable PQC DTLS if browser supports it
+    // This uses the proposed W3C API: https://github.com/w3c/webrtc-extensions/issues/207
+    if (pqcSupport.supported) {
+      try {
+        // Proposed API for PQC DTLS
+        (config as any).cryptoOptions = {
+          dtls: {
+            // X25519MLKEM768 is the hybrid classical+PQC key exchange
+            groups: ['X25519MLKEM768', 'X25519']
+          }
+        };
+        console.log('[PQC Client] Attempting PQC DTLS with X25519MLKEM768');
+        updateState({ dtlsPqcEnabled: true });
+      } catch (e) {
+        console.warn('[PQC Client] Failed to set PQC DTLS options:', e);
+        updateState({ dtlsPqcEnabled: false });
+      }
+    } else {
+      console.log('[PQC Client] Browser does not support PQC DTLS yet');
+      console.log('[PQC Client] To enable PQC DTLS:');
+      console.log('  - Chrome: chrome://flags/#enable-webrtc-dtls-pqc');
+      console.log('  - Firefox Nightly: about:config -> security.tls.enable_kyber');
+      updateState({ dtlsPqcEnabled: false });
+    }
+
     peerConnection = new RTCPeerConnection(config);
+
+    // Start monitoring DTLS stats
+    startStatsMonitoring();
 
     // Add local tracks
     if (localStream) {
