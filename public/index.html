@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC PQC - Post-Quantum Secure Video Call</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(90deg, #00d4ff, #7b2fff, #ff00d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 1.1rem;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 350px;
+      gap: 20px;
+    }
+
+    @media (max-width: 1100px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Video Section */
+    .video-section {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .video-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 700px) {
+      .video-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .video-container {
+      position: relative;
+      aspect-ratio: 16/9;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid rgba(123, 47, 255, 0.3);
+    }
+
+    .video-container video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .video-label {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .video-label .pqc-badge {
+      background: linear-gradient(90deg, #00d4ff, #7b2fff);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: bold;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .room-input-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    input {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: white;
+      font-size: 1rem;
+      width: 180px;
+    }
+
+    input::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    button {
+      background: linear-gradient(135deg, #7b2fff, #00d4ff);
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(123, 47, 255, 0.4);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    button.secondary {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    button.danger {
+      background: linear-gradient(135deg, #ff4757, #ff6b81);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .panel-header h3 {
+      font-size: 1rem;
+      color: #fff;
+    }
+
+    .panel-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #7b2fff, #00d4ff);
+      border-radius: 6px;
+      font-size: 0.8rem;
+    }
+
+    /* Status Panel */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .status-row:last-child {
+      border-bottom: none;
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #666;
+      animation: pulse 2s infinite;
+    }
+
+    .status-indicator.disconnected {
+      background: #666;
+      animation: none;
+    }
+
+    .status-indicator.connecting,
+    .status-indicator.pqc-handshake {
+      background: #ffc107;
+    }
+
+    .status-indicator.established {
+      background: #00e676;
+    }
+
+    .status-indicator.error {
+      background: #ff4757;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-label {
+      color: #888;
+      font-size: 0.85rem;
+      flex: 1;
+    }
+
+    .status-value {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .status-value.success {
+      color: #00e676;
+    }
+
+    .status-value.pending {
+      color: #ffc107;
+    }
+
+    /* Algorithm Details */
+    .algo-detail {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .algo-detail:last-child {
+      border-bottom: none;
+    }
+
+    .algo-label {
+      color: #888;
+      font-size: 0.85rem;
+    }
+
+    .algo-value {
+      color: #00d4ff;
+      font-size: 0.85rem;
+      font-family: 'Monaco', 'Menlo', monospace;
+    }
+
+    /* Logs Panel */
+    #logs {
+      max-height: 250px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.75rem;
+      line-height: 1.6;
+    }
+
+    .log-entry {
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+    }
+
+    .log-entry.info {
+      background: rgba(0, 212, 255, 0.1);
+      color: #00d4ff;
+    }
+
+    .log-entry.success {
+      background: rgba(0, 230, 118, 0.1);
+      color: #00e676;
+    }
+
+    .log-entry.warning {
+      background: rgba(255, 193, 7, 0.1);
+      color: #ffc107;
+    }
+
+    .log-entry.error {
+      background: rgba(255, 71, 87, 0.1);
+      color: #ff4757;
+    }
+
+    .timestamp {
+      color: #666;
+      margin-right: 8px;
+    }
+
+    /* PQC Security Badge */
+    .security-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(135deg, rgba(123, 47, 255, 0.2), rgba(0, 212, 255, 0.2));
+      border: 1px solid rgba(123, 47, 255, 0.3);
+      border-radius: 12px;
+      padding: 15px;
+      margin-top: 10px;
+    }
+
+    .security-badge .shield {
+      font-size: 2rem;
+    }
+
+    .security-badge .text {
+      flex: 1;
+    }
+
+    .security-badge .title {
+      font-weight: 600;
+      color: #00d4ff;
+      margin-bottom: 4px;
+    }
+
+    .security-badge .desc {
+      font-size: 0.8rem;
+      color: #888;
+    }
+
+    /* Info tooltip */
+    .info-box {
+      background: rgba(0, 212, 255, 0.1);
+      border-left: 3px solid #00d4ff;
+      padding: 12px;
+      margin-top: 15px;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+
+    .info-box strong {
+      color: #00d4ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>WebRTC + Post-Quantum Cryptography</h1>
+      <p class="subtitle">Proof of Concept: ML-KEM-768 (Kyber) Secured Video Calls</p>
+    </header>
+
+    <div class="main-grid">
+      <!-- Video Section -->
+      <div class="video-section">
+        <div class="video-grid">
+          <div class="video-container">
+            <video id="local-video" autoplay muted playsinline></video>
+            <div class="video-label">
+              Local
+              <span class="pqc-badge">PQC</span>
+            </div>
+          </div>
+          <div class="video-container">
+            <video id="remote-video" autoplay playsinline></video>
+            <div class="video-label">
+              Remote
+              <span class="pqc-badge">PQC</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="room-input-group">
+            <input type="text" id="room-input" placeholder="Enter Room ID">
+            <button id="generate-room-btn" class="secondary" title="Generate Random Room">New</button>
+          </div>
+          <button id="join-btn" disabled>Join Room</button>
+          <button id="hangup-btn" class="danger" disabled>Hang Up</button>
+        </div>
+
+        <div class="info-box">
+          <strong>How to test:</strong> Open this page in two browser tabs or different devices.
+          Generate a room ID in one tab, copy it to the other, and join from both to establish a
+          PQC-secured WebRTC video call.
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <!-- Connection Status -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon">S</div>
+            <h3>Connection Status</h3>
+          </div>
+          <div class="status-row">
+            <div id="status-indicator" class="status-indicator disconnected"></div>
+            <span id="status-text" class="status-value">Disconnected</span>
+          </div>
+        </div>
+
+        <!-- PQC Algorithm Details -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon">Q</div>
+            <h3>PQC Algorithm Details</h3>
+          </div>
+          <div class="algo-detail">
+            <span class="algo-label">Algorithm</span>
+            <span id="algorithm-name" class="algo-value">ML-KEM-768</span>
+          </div>
+          <div class="algo-detail">
+            <span class="algo-label">Security Level</span>
+            <span id="security-level" class="algo-value">NIST Level 3</span>
+          </div>
+          <div class="algo-detail">
+            <span class="algo-label">Public Key Size</span>
+            <span id="public-key-size" class="algo-value">1184 bytes</span>
+          </div>
+          <div class="algo-detail">
+            <span class="algo-label">Ciphertext Size</span>
+            <span id="ciphertext-size" class="algo-value">1088 bytes</span>
+          </div>
+          <div class="algo-detail">
+            <span class="algo-label">Key Exchange Time</span>
+            <span id="key-exchange-time" class="algo-value">-- ms</span>
+          </div>
+          <div class="algo-detail">
+            <span class="algo-label">Shared Secret</span>
+            <span id="shared-secret-status" class="algo-value pending">Pending</span>
+          </div>
+
+          <div class="security-badge">
+            <div class="shield">🛡️</div>
+            <div class="text">
+              <div class="title">Quantum-Resistant</div>
+              <div class="desc">Protected against attacks from future quantum computers</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Event Log -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon">L</div>
+            <h3>Event Log</h3>
+          </div>
+          <div id="logs"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/bundle.js"></script>
+</body>
+</html>
